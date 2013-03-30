@@ -18,15 +18,15 @@ local site = tweed.make_site {
 			return "signuppost"
 		end
 	},
-	[tweed.string] = {
+	[tweed.int 'foo'] = {
 		[GET] = function(context)
-			return "generic get"
+			return "generic get: " .. context.params.foo
 		end,
 		[DELETE] = function(context)
-			return "generic delete"
+			return "generic delete: " .. context.params.foo
 		end,
-		[tweed.string] = function(context)
-			return "nested params!"
+		[tweed.string 'bar'] = function(context)
+			return "nested params: " .. context.params.foo .. ' ' .. context.params.bar
 		end
 	}
 }

@@ -1,6 +1,7 @@
 local leafy = require "leafy"
 local route, callable = leafy.route, leafy.callable
 local M = {}
+local inspect = require "inspect"
 
 local GET, POST, PUT, DELETE = {"GET"}, {"POST"}, {"PUT"}, {"DELETE"}
 
@@ -30,26 +31,27 @@ local site_mt = {
 			</html>]]):format(error_message))
 		end,
 		run_ = function(self, wsapi_env)
-			local func = route(self.routing, wsapi_env.PATH_INFO)
+			local params = {}
+			local func = route(self.routing, wsapi_env.PATH_INFO, params)
 			-- build context and call func with it
-			local context = {}
-			context.request = {}
+			local context = { params = params}
+			local request, response = {}, {}
+			context.request = new_request(wsapi_env)
+			context.response = new_response()
 			context.request.method = wsapi_env.REQUEST_METHOD
-			return 200, {}, coroutine.wrap(function() coroutine.yield(func(context)) end)
+			return response.status, response.headers, response:output()
 		end
 	}
 }
 
-local function param(string)
-	return setmetatable({type = 'param', value = string}, {
-		__tostring = function(p) 
-			return "[param " .. p.value .. ']' end
-		}
-	)
-end
-
 local function istable(t)
 	return type(t) == 'table'
+end
+
+local function new_response()
+	return setmetatable({status = 200, headers = {}, }, { __index = {
+		
+	}})
 end
 
 local function contains(tab, val)
@@ -62,7 +64,7 @@ local function contains(tab, val)
 	return false
 end
 
-- see rfc 2616 sec10.4.5
+-- see rfc 2616 sec10.4.5
 local function method_unsup(meth)
 	return setmetatable({unsup=true},
 	{ __call = function(method, context)
@@ -112,7 +114,7 @@ local function make_default_from_table(t)
 		return t
 	else
 		return setmetatable(newtab, {
-		default = function(remainder)
+		default = function(remainder, extra_params)
 			if next(remainder) == nil then
 				-- no need to handle any remainder
 				return false, function(context)
@@ -120,16 +122,12 @@ local function make_default_from_table(t)
 				end
 			else
 				for k, v in pairs(params) do
-					if callable(k) then
-						if k(remainder[1]) then
-							if callable(v) then
-								return false, function(context)
-									context.params[k.name] = remainder[1]
-									return v()
-								end
-							end
-							return true, v
+					if k(remainder[1]) then
+						extra_params[k.name] = remainder[1]
+						if callable(v) then
+							return false, v
 						end
+						return true, v
 					end
 				end
 			end
@@ -145,7 +143,7 @@ local function make_site(tab, options)
 		return site:run_(wsapi_env)
 	end
 
-	for k, v in pairs(options) do
+	for k, v in pairs(options or {}) do
 		site[k] = v
 	end
 	return site
@@ -155,7 +153,18 @@ M.make_site = make_site
 M.param = param
 
 function M.string(val) 
-	return type(val) == 'string'
+	return setmetatable({name = val}, {
+		__call = function(self, segment)
+			return type(segment) == 'string'
+		end
+	})
 end
 
+function M.int(val)
+	return setmetatable({name = val}, {
+		__call = function(self, segment)
+			return type(segment) == 'int'
+		end
+	})
+end
 return M
