@@ -100,6 +100,10 @@ local function make_default_from_table(t)
 		PUT = method_unsup('PUT'),
 		POST = method_unsup('POST'),
 		DELETE = method_unsup('DELETE'),
+		HEAD = function(method, ctx)
+			method.GET(method, ctx)
+			ctx.response:reset_output()
+		end
 	}, {__index = function(tab, key)
 			local rawk = rawget(tab, key)
 			if rawk then return rawk end
