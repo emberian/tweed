@@ -2,13 +2,11 @@ local response_mt = {}
 
 function response_mt:reset_output()
 	self.output = {}
-	self.headers['Content-Length'] = 0
 end
 
 function response_mt:write(data)
 	assert(data)
 	table.insert(self.output, data)
-	self.headers['Content-Length'] = self.headers['Content-Length'] + #data
 end
 
 function response_mt:err(status, message)
