@@ -3,6 +3,11 @@ local route, callable = leafy.route, leafy.callable
 local M = {}
 local inspect = require "inspect"
 
+local new_response = require "tweed.response"
+local new_request = require "tweed.request"
+local filters = require "tweed.filters"
+local error_handlers = require "tweed.error_handlers"
+
 local GET, POST, PUT, DELETE = {"GET"}, {"POST"}, {"PUT"}, {"DELETE"}
 
 M.GET = GET
@@ -13,45 +18,51 @@ M.DELETE = DELETE
 local site_mt = {
 	__index = {
 		-- default function called when there's an error in a controller
-		error_handler = function(self, context, ...)
-			local response = context.response
-			if not self.debug then
-				error_message = "Turn on debugging to see why."
-			end
-			response.status = 500
-			response:reset_output()
-			response:html(([[
-			<!doctype html>
-			<html>
-			<body>
-			<b>Internal Error</b>
-			<p>The server has encountered an internal error.</p>
-			<pre>%s</pre>
-			</body>
-			</html>]]):format(error_message))
+		error_handlers = error_handlers,
+
+		err = function(self, status, ...)
+			self.context.response.status = status
+			self.error_handlers[status](self, ...)
 		end,
+
 		run_ = function(self, wsapi_env)
 			local params = {}
 			local func = route(self.routing, wsapi_env.PATH_INFO, params)
-			-- build context and call func with it
+			-- build context
 			local context = { params = params}
-			local request, response = {}, {}
-			context.request = new_request(wsapi_env)
-			context.response = new_response()
-			context.request.method = wsapi_env.REQUEST_METHOD
-			return response.status, response.headers, response:output()
+			local request, response = new_request(wsapi_env), new_response()
+
+			context.request = request
+			context.response = response
+
+			self.context = context
+			-- call func or 404
+			if not func then
+				self:err(404)
+			else
+				local suc, err = pcall(func, context)
+				if not suc then
+					self:err(500, err)
+				end
+			end
+
+			-- return the output to wsapi
+			if type(output) ~= 'function' then
+				output = coroutine.wrap(function()
+					for _, v in ipairs(response.output) do
+						coroutine.yield(v)
+					end
+				end)
+			end
+
+			return response.status, response.headers, output
 		end
 	}
 }
 
+
 local function istable(t)
 	return type(t) == 'table'
-end
-
-local function new_response()
-	return setmetatable({status = 200, headers = {}, }, { __index = {
-		
-	}})
 end
 
 local function contains(tab, val)
@@ -67,13 +78,13 @@ end
 -- see rfc 2616 sec10.4.5
 local function method_unsup(meth)
 	return setmetatable({unsup=true},
-	{ __call = function(method, context)
+	{ __call = function(self, method, context)
 		local res = context.response
 		res.status = 405
 		local supported = {}
 		for k, v in pairs(method) do
-			if not v.unsup then
-				supported.insert(k)
+			if not istable(v) or not v.unsup then
+				table.insert(supported, k)
 			end
 		end
 		res.headers['Allow'] = table.concat(supported, ', ')
@@ -84,12 +95,19 @@ end
 local function make_default_from_table(t)
 	assert(istable(t))
 	local newtab = {}
-	local method = {
+	local method = setmetatable({
 		GET = method_unsup('GET'),
 		PUT = method_unsup('PUT'),
 		POST = method_unsup('POST'),
 		DELETE = method_unsup('DELETE'),
-	}
+	}, {__index = function(tab, key)
+			local rawk = rawget(tab, key)
+			if rawk then return rawk end
+			tab[key] = method_unsup(key)
+			return rawget(tab, key)
+		end
+	})
+
 	local params = {}
 	for k, v in pairs(t) do
 		if istable(v) then
@@ -118,7 +136,7 @@ local function make_default_from_table(t)
 			if next(remainder) == nil then
 				-- no need to handle any remainder
 				return false, function(context)
-					return method[context.request.method](method, context)
+					method[context.request.method](method, context)
 				end
 			else
 				for k, v in pairs(params) do
@@ -152,19 +170,7 @@ end
 M.make_site = make_site
 M.param = param
 
-function M.string(val) 
-	return setmetatable({name = val}, {
-		__call = function(self, segment)
-			return type(segment) == 'string'
-		end
-	})
-end
+M.int = filters.int
+M.string = filters.string
 
-function M.int(val)
-	return setmetatable({name = val}, {
-		__call = function(self, segment)
-			return type(segment) == 'int'
-		end
-	})
-end
 return M

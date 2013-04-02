@@ -5,30 +5,31 @@ local GET, POST, DELETE, param = tweed.GET, tweed.POST, tweed.DELETE, tweed.para
 
 local site = tweed.make_site {
 	[""] = function(context)
-		return "index"
+		context.response:text("root")
 	end,
 	about = function(context)
-		return "about"
+		context.response:text("about")
 	end,
 	signup = {
 		[GET] = function(context)
-			return "signupget"
+			context.response:text("GET signup")
 		end,
 		[POST] = function(context)
-			return "signuppost"
+			context.response:text("POST signup")
 		end
 	},
 	[tweed.int 'foo'] = {
 		[GET] = function(context)
-			return "generic get: " .. context.params.foo
+			context.response:text("generic get: " .. context.params.foo)
 		end,
 		[DELETE] = function(context)
-			return "generic delete: " .. context.params.foo
+			context.response:text("generic delete: " .. context.params.foo)
 		end,
 		[tweed.string 'bar'] = function(context)
-			return "nested params: " .. context.params.foo .. ' ' .. context.params.bar
+			context.response:text("nested params: " .. context.params.foo .. ' ' .. context.params.bar)
 		end
 	}
 }
 
+site.debug = true
 return site
