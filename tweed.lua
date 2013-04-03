@@ -31,6 +31,7 @@ local site_mt = {
 			-- build context
 			local context = { params = params}
 			local request, response = new_request(wsapi_env), new_response()
+			local output
 
 			context.request = request
 			context.response = response
