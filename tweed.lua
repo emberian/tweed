@@ -22,7 +22,12 @@ local site_mt = {
 
 		err = function(self, status, ...)
 			self.context.response.status = status
-			self.error_handlers[status](self, ...)
+			local handler = rawget(self.error_handlers, status)
+			if handler == nil then
+				self.error_handlers.default(self, status, ...)
+			else
+				handler(self, ...)
+			end
 		end,
 
 		run_ = function(self, wsapi_env)
@@ -30,20 +35,24 @@ local site_mt = {
 			local func = route(self.routing, wsapi_env.PATH_INFO, params)
 			-- build context
 			local context = { params = params}
-			local request, response = new_request(wsapi_env), new_response()
+			local request = new_request(wsapi_env)
+			local response = new_response(request)
+			response.error_handlers = self.error_handlers
+
 			local output
 
 			context.request = request
 			context.response = response
+			response.request = request
 
 			self.context = context
 			-- call func or 404
 			if not func then
-				self:err(404)
+				response:err(404)
 			else
 				local suc, err = pcall(func, context)
 				if not suc then
-					self:err(500, err)
+					response:err(500, err)
 				end
 			end
 

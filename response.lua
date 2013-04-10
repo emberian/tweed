@@ -9,10 +9,14 @@ function response_mt:write(data)
 	table.insert(self.output, data)
 end
 
-function response_mt:err(status, message)
-	self.status = assert(status)
-	self:reset_output()
-	self:write(message)
+function response_mt:err(status, ...)
+	self.status = status
+	local handler = rawget(self.error_handlers, status)
+	if handler == nil then
+		self.error_handlers.default(self, status, ...)
+	else
+		handler(self, ...)
+	end
 end
 
 function response_mt:redirect(path, status, body, mimetype)
@@ -44,8 +48,8 @@ response_mt.xml = make_writer('application/xml')
 response_mt.status = 200
 response_mt.headers = {}
 
-local function make_response()
-	return setmetatable({output = {}}, {__index = response_mt})
+local function make_response(req)
+	return setmetatable({output = {}, request = req}, {__index = response_mt})
 end
 
 return make_response

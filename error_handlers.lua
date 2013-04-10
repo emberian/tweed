@@ -1,10 +1,8 @@
-return setmetatable({
-	[500] = function(self, ...)
-		local response = self.context.response
+return {
+	[500] = function(response, ...)
 		if not self.debug then
 			error_message = "Turn on debugging to see why."
 		end
-		response.status = 500
 		response:reset_output()
 		local error_template = [[
 <!doctype html>
@@ -18,8 +16,9 @@ return setmetatable({
 ]]
 		response:html(error_template:format(table.concat({...})))
 	end,
-	[404] = function(self, ...)
-		local response, request = self.context.response, self.context.request
+	[404] = function(response, ...)
+		local request = response.request
+		response:reset_output()
 		local error_template = [[
 <!doctype html>
 <html>
@@ -32,20 +31,16 @@ return setmetatable({
 ]]
 		response:html(error_template:format(request.env.REQUEST_URI))
 	end,
-}, { __index = function(tab, key)
-	local rawk = rawget(tab, key)
-	if not rawk
-		then return function(self, ...)
-			self.context.response:html(([[
+	default = function(self, status, ...)
+		local response = self.context.response
+		response:reset_output()
+		response:html(( [[
 <!doctype html>
 <html>
 	<body>
 		<b>HTTP Error %d</b>
 	</body>
 </html>
-]]):format(key))
-	end
-	else
-		return rawk
-	end
-end})
+]]):format(status))
+	end,
+}
