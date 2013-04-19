@@ -1,4 +1,4 @@
-
+local querystring = require "tweed.querystring"
 
 return function(env)
 	local request = {}
@@ -9,6 +9,9 @@ return function(env)
 		if rawk then return rawk end
 		if key == 'body' then
 			tab[key] = env.input:read()
+			return rawget(tab, key)
+		elseif key == "qs" then
+			tab[key] = querystring.parse(env.QUERY_STRING)
 			return rawget(tab, key)
 		end
 	end})

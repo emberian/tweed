@@ -20,5 +20,6 @@ build = {
 		["tweed.request"] = "request.lua",
 		["tweed.error_handlers"] = "error_handlers.lua",
 		["tweed"] = "tweed.lua",
+		["tweed.querystring"] = "querystring.lua"
 	}
 }
